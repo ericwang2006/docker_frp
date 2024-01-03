@@ -18,6 +18,10 @@ frp also offers a P2P connect mode.
 
 - If you need to install docker by yourself, follow the [official installation guide](https://docs.docker.com/install/).
 
+### We provide free FRP servers
+
+Please refer to the latest server information for details：https://frp.104300.xyz
+
 ### Instruction
 
 #### Client(frpc)
