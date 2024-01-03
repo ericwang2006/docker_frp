@@ -22,7 +22,7 @@ frp also offers a P2P connect mode.
 
 Please refer to the latest server information for details：https://frp.104300.xyz
 
-### Instruction
+### Usage
 
 #### Client(frpc)
 
