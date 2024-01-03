@@ -1,6 +1,5 @@
-<img src="https://img.shields.io/docker/stars/ericwang2006/frpc.svg"/>
-<img src="https://img.shields.io/docker/pulls/ericwang2006/frpc.svg"/>
-<img src="https://img.shields.io/docker/image-size/ericwang2006/frpc/latest"/>
+<img src="http://dockeri.co/image/ericwang2006/frps"/>
+<img src="http://dockeri.co/image/ericwang2006/frpc"/>
 
 ### What is frp?
 
