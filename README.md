@@ -128,7 +128,7 @@ docker-compose
 version: '2'
 
 services:     
-  frp-client:
+  frp-server:
     image: ericwang2006/frps
     container_name: frp-server
     restart: always
