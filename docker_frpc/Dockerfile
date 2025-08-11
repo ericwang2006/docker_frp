@@ -1,10 +1,10 @@
-FROM --platform=${TARGETPLATFORM} alpine:latest
+FROM alpine:latest
 
 ARG TARGETPLATFORM
 
 ENV FRPC_CONFIG=frpc.ini
 
-RUN apk --no-cache add jq
+RUN apk --no-cache add jq ca-certificates
 
 COPY . /tmp/
 
