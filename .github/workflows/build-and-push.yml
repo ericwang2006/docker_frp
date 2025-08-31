@@ -12,10 +12,95 @@ on:
         required: false
         default: true
         type: boolean
+      force_build:
+        description: 'Force build even if version is not newer'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # 每天 UTC 时间 02:00 运行 (北京时间 10:00)
+    - cron: '0 2 * * *'
 
 jobs:
-  build-and-push:
+  check-version:
     runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.version_check.outputs.should_build }}
+      frp_version: ${{ steps.version_check.outputs.frp_version }}
+    steps:
+      - name: Check versions and decide if build is needed
+        id: version_check
+        run: |
+          set -e
+
+          # 获取 FRP 最新版本
+          if [ -n "${{ github.event.inputs.frp_version }}" ]; then
+            FRP_VERSION="${{ github.event.inputs.frp_version }}"
+            echo "Using manually specified version: $FRP_VERSION"
+          else
+            FRP_VERSION=$(wget -q -O - "https://api.github.com/repos/fatedier/frp/releases/latest" | jq -r '.tag_name')
+            echo "Latest FRP version: $FRP_VERSION"
+          fi
+
+          # 检查是否强制构建
+          if [ "${{ github.event.inputs.force_build }}" = "true" ]; then
+            echo "Force build enabled, skipping version check"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "frp_version=$FRP_VERSION" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 获取 Docker Hub 上的版本信息
+          echo "Checking Docker Hub for existing versions..."
+
+          # 检查 FRPC 镜像的标签
+          FRPC_TAGS=$(wget -q -O - "https://registry.hub.docker.com/v2/repositories/ericwang2006/frpc/tags/?page_size=100" | jq -r '.results[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || echo "")
+
+          # 检查 FRPS 镜像的标签
+          FRPS_TAGS=$(wget -q -O - "https://registry.hub.docker.com/v2/repositories/ericwang2006/frps/tags/?page_size=100" | jq -r '.results[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || echo "")
+
+          echo "Latest FRPC tag on Docker Hub: $FRPC_TAGS"
+          echo "Latest FRPS tag on Docker Hub: $FRPS_TAGS"
+
+          # 版本比较函数
+          version_gt() {
+            # 移除 'v' 前缀进行比较
+            local ver1=$(echo "$1" | sed 's/^v//')
+            local ver2=$(echo "$2" | sed 's/^v//')
+            [ "$(printf '%s\n' "$ver1" "$ver2" | sort -V | head -n1)" != "$ver1" ]
+          }
+
+          # 判断是否需要构建
+          SHOULD_BUILD=false
+
+          # 如果 Docker Hub 上没有任何版本标签，则需要构建
+          if [ -z "$FRPC_TAGS" ] || [ -z "$FRPS_TAGS" ]; then
+            echo "No version tags found on Docker Hub, building is needed"
+            SHOULD_BUILD=true
+          else
+            # 比较版本，如果 FRP 版本更新，则需要构建
+            if version_gt "$FRP_VERSION" "$FRPC_TAGS" || version_gt "$FRP_VERSION" "$FRPS_TAGS"; then
+              echo "FRP version $FRP_VERSION is newer than Docker Hub versions (FRPC: $FRPC_TAGS, FRPS: $FRPS_TAGS)"
+              SHOULD_BUILD=true
+            else
+              echo "FRP version $FRP_VERSION is not newer than existing Docker Hub versions"
+              SHOULD_BUILD=false
+            fi
+          fi
+
+          echo "should_build=$SHOULD_BUILD" >> $GITHUB_OUTPUT
+          echo "frp_version=$FRP_VERSION" >> $GITHUB_OUTPUT
+
+          if [ "$SHOULD_BUILD" = "true" ]; then
+            echo "✅ Build will proceed"
+          else
+            echo "⏭️ Build will be skipped"
+          fi
+
+  build-and-push:
+    needs: check-version
+    runs-on: ubuntu-latest
+    if: needs.check-version.outputs.should_build == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,26 +117,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Get FRP version
-        id: get_version
-        run: |
-          if [ -n "${{ github.event.inputs.frp_version }}" ]; then
-            echo "version=${{ github.event.inputs.frp_version }}" >> $GITHUB_OUTPUT
-          else
-            VERSION=$(wget -q -O - "https://api.github.com/repos/fatedier/frp/releases" | jq -r '.[0].tag_name')
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build and Push FRPC
         uses: docker/build-push-action@v5
         with:
           context: ./docker_frpc
           file: ./docker_frpc/Dockerfile
           platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
-          push: ${{ github.event.inputs.push_to_registry }}
+          push: ${{ github.event.inputs.push_to_registry || 'true' }}
           tags: |
             ericwang2006/frpc:latest
-            ericwang2006/frpc:${{ steps.get_version.outputs.version }}
+            ericwang2006/frpc:${{ needs.check-version.outputs.frp_version }}
 
       - name: Build and Push FRPS
         uses: docker/build-push-action@v5
@@ -59,7 +134,17 @@ jobs:
           context: ./docker_frps
           file: ./docker_frps/Dockerfile
           platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
-          push: ${{ github.event.inputs.push_to_registry }}
+          push: ${{ github.event.inputs.push_to_registry || 'true' }}
           tags: |
             ericwang2006/frps:latest
-            ericwang2006/frps:${{ steps.get_version.outputs.version }}
+            ericwang2006/frps:${{ needs.check-version.outputs.frp_version }}
+
+      - name: Build Summary
+        run: |
+          echo "## 🚀 Build Completed Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "**FRP Version:** ${{ needs.check-version.outputs.frp_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Images Built:**" >> $GITHUB_STEP_SUMMARY
+          echo "- ericwang2006/frpc:latest" >> $GITHUB_STEP_SUMMARY
+          echo "- ericwang2006/frpc:${{ needs.check-version.outputs.frp_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ericwang2006/frps:latest" >> $GITHUB_STEP_SUMMARY
+          echo "- ericwang2006/frps:${{ needs.check-version.outputs.frp_version }}" >> $GITHUB_STEP_SUMMARY
