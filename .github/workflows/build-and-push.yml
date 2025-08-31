@@ -1,0 +1,65 @@
+name: Build and Push FRP Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      frp_version:
+        description: 'FRP version to build (e.g., v0.58.0). If empty, latest will be used.'
+        required: false
+        default: ''
+      push_to_registry:
+        description: 'Push images to Docker Hub'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Get FRP version
+        id: get_version
+        run: |
+          if [ -n "${{ github.event.inputs.frp_version }}" ]; then
+            echo "version=${{ github.event.inputs.frp_version }}" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(wget -q -O - "https://api.github.com/repos/fatedier/frp/releases" | jq -r '.[0].tag_name')
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and Push FRPC
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker_frpc
+          file: ./docker_frpc/Dockerfile
+          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
+          push: ${{ github.event.inputs.push_to_registry }}
+          tags: |
+            ericwang2006/frpc:latest
+            ericwang2006/frpc:${{ steps.get_version.outputs.version }}
+
+      - name: Build and Push FRPS
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker_frps
+          file: ./docker_frps/Dockerfile
+          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
+          push: ${{ github.event.inputs.push_to_registry }}
+          tags: |
+            ericwang2006/frps:latest
+            ericwang2006/frps:${{ steps.get_version.outputs.version }}
