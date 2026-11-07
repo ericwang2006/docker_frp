@@ -10,7 +10,7 @@ frp also offers a P2P connect mode.
 
 ### Reference
 
-- Supported architectures ([*more info*](https://github.com/docker-library/official-images#architectures-other-than-amd64)): `amd64`, `arm32v6`, `arm32v7`, `arm64v8`
+- Supported architectures ([*more info*](https://github.com/docker-library/official-images#architectures-other-than-amd64)): `amd64`, `386`, `arm32v6`, `arm32v7`, `arm64v8`, `ppc64le`, `riscv64`, `s390x` (All Alpine-supported architectures)
 
 - If you need to install docker by yourself, follow the [official installation guide](https://docs.docker.com/install/).
 

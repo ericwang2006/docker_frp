@@ -144,7 +144,9 @@ jobs:
         with:
           context: ./docker_frpc
           file: ./docker_frpc/Dockerfile
-          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
+          platforms: linux/amd64,linux/386,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/riscv64,linux/s390x
+          build-args: |
+            FRP_VERSION=${{ needs.check-version.outputs.frp_version }}
           push: ${{ github.event.inputs.push_to_registry || 'true' }}
           tags: |
             ericwang2006/frpc:latest
@@ -155,7 +157,9 @@ jobs:
         with:
           context: ./docker_frps
           file: ./docker_frps/Dockerfile
-          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
+          platforms: linux/amd64,linux/386,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/riscv64,linux/s390x
+          build-args: |
+            FRP_VERSION=${{ needs.check-version.outputs.frp_version }}
           push: ${{ github.event.inputs.push_to_registry || 'true' }}
           tags: |
             ericwang2006/frps:latest
@@ -165,6 +169,7 @@ jobs:
         run: |
           echo "## 🚀 Build Completed Successfully" >> $GITHUB_STEP_SUMMARY
           echo "**FRP Version:** ${{ needs.check-version.outputs.frp_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms Supported:** linux/amd64, linux/386, linux/arm/v6, linux/arm/v7, linux/arm64, linux/ppc64le, linux/riscv64, linux/s390x" >> $GITHUB_STEP_SUMMARY
           echo "**Images Built:**" >> $GITHUB_STEP_SUMMARY
           echo "- ericwang2006/frpc:latest" >> $GITHUB_STEP_SUMMARY
           echo "- ericwang2006/frpc:${{ needs.check-version.outputs.frp_version }}" >> $GITHUB_STEP_SUMMARY
